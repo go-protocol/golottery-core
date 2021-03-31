@@ -3,11 +3,10 @@ pragma solidity 0.6.12;
 pragma experimental ABIEncoderV2;
 
 import "./LotteryNFT.sol";
-import "./LotteryOwnable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/proxy/Initializable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // import "@nomiclabs/buidler/console.sol";
 interface Uni {
@@ -24,11 +23,15 @@ interface IGOT {
     function burn(uint256 amount) external;
 }
 
+interface ILottery {
+    function buy(uint256 _price, uint8[4] calldata _numbers) external;
+}
+
 /**
  * @title 4个号码的乐透彩票合约
  * @notice 4个号码必须按顺序匹配
  */
-contract Lottery is LotteryOwnable, Initializable {
+contract Lottery is Ownable {
     using SafeMath for uint256;
     using SafeMath for uint8;
     using SafeERC20 for IERC20;
@@ -42,15 +45,13 @@ contract Lottery is LotteryOwnable, Initializable {
     /// @dev 管理员地址
     address public adminAddress;
     /// @dev 最大数字
-    uint8 public maxNumber;
+    uint8 public maxNumber = 14;
     /// @dev 最低售价，如果小数点不为18，请重设
-    uint256 public minPrice;
+    uint256 public minPrice = 1000000000000000000;
     /// @notice GoSwap路由地址
-    address public constant GoSwapRouter = 0xB88040A237F8556Cf63E305a06238409B3CAE7dC;
-    /// @notice GOT地址
-    address public constant GOT = 0xA7d5b5Dbc29ddef9871333AD2295B2E7D6F12391;
-    /// @notice GOC地址 用于购买彩票的Token
-    address public constant GOC = 0x271B54EBe36005A7296894F819D626161C44825C;
+    address public constant GOSWAP_ROUTER = 0xB88040A237F8556Cf63E305a06238409B3CAE7dC;
+    /// @notice 购买彩票的Token
+    address public token;
 
     // =================================
 
@@ -92,38 +93,19 @@ contract Lottery is LotteryOwnable, Initializable {
 
     /**
      * @dev 构造函数
-     */
-    constructor() public {}
-
-    /**
-     * @dev 初始化函数
      * @param _lottery 乐透NFT地址
-     * @param _minPrice 最低售价 1000000000000000000
-     * @param _maxNumber 最大数字 14
-     * @param _owner 所有权 0xb9fa21a62fc96cb2ac635a051061e2e50d964051
-     * @param _adminAddress 管理员 0x35f16a46d3cf19010d28578a8b02dfa3cb4095a1
+     * @param _token 购买彩票的Token
      */
-    function initialize(
-        LotteryNFT _lottery,
-        uint256 _minPrice,
-        uint8 _maxNumber,
-        address _owner,
-        address _adminAddress
-    ) public initializer {
+    constructor(LotteryNFT _lottery, address _token) public {
         lotteryNFT = _lottery;
-        minPrice = _minPrice;
-        maxNumber = _maxNumber;
-        adminAddress = _adminAddress;
+        adminAddress = msg.sender;
         lastTimestamp = block.timestamp;
-        allocation = [60, 20, 10];
-        // 初始化所有权
-        initOwner(_owner);
-        // 批准GOC无限量
-        IERC20(GOC).approve(GoSwapRouter, uint256(-1));
+        allocation = [50, 30, 10];
+        token = _token;
     }
 
     /// @dev 空票
-    uint8[4] private nullTicket = [0, 0, 0, 0];
+    uint8[4] internal nullTicket = [0, 0, 0, 0];
 
     /// @dev 只能通过管理员访问
     modifier onlyAdmin() {
@@ -140,7 +122,7 @@ contract Lottery is LotteryOwnable, Initializable {
     /**
      * @dev 重置
      */
-    function reset() external onlyAdmin {
+    function reset() public virtual {
         // 确认开奖后
         require(drawed(), "drawed?");
         // 最后时间戳=当前区块时间戳
@@ -158,26 +140,16 @@ contract Lottery is LotteryOwnable, Initializable {
         drawingPhase = false;
         // 发行索引+1
         issueIndex = issueIndex + 1;
-        // 如果上期一等奖获奖人数为0
-        if (getMatchingRewardAmount(issueIndex - 1, 4) == 0) {
-            // 数额 = 最后一次总奖金 * 一等奖分配比例 / 100
-            uint256 amount = getTotalRewards(issueIndex - 1).mul(allocation[0]).div(100);
-            // 内部购买(买一张0,0,0,0的彩票,目的为了把奖金放到下期奖池)
-            internalBuy(amount, nullTicket);
+        // 处理未中奖的奖金,投放到下期奖池
+        for (uint256 i = 0; i < 3; i++) {
+            // 如果上期选中(4-i)个号码的人数为0
+            if (getMatchingRewardAmount(issueIndex - 1, 4 - i) == 0) {
+                // 数额 = 最后一次总奖金 * 奖金分配比例 / 100
+                uint256 amount = getTotalRewards(issueIndex - 1).mul(allocation[i]).div(100);
+                // 内部购买(买一张0,0,0,0的彩票,目的为了把奖金放到下期奖池)
+                _internalBuy(amount, nullTicket);
+            }
         }
-        // 销毁数额 = 最后一次总奖金 * (100 - 一等奖+二等奖+三等奖)分配比例 / 100
-        uint8 burnAllocation = uint8(uint8(100).sub(allocation[0]).sub(allocation[1]).sub(allocation[2]));
-        uint256 burnAmount = getTotalRewards(issueIndex - 1).mul(burnAllocation).div(100);
-        // 交易路径 GOC=>GOT
-        address[] memory path = new address[](2);
-        path[0] = GOC;
-        path[1] = GOT;
-        // 调用路由合约用GOC交换GOT
-        Uni(GoSwapRouter).swapExactTokensForTokens(burnAmount, uint256(0), path, address(this), block.timestamp.add(1800));
-        // 当前合约的GOT余额
-        uint256 GOTBalance = IERC20(GOT).balanceOf(address(this));
-        // 销毁GOT
-        IGOT(GOT).burn(GOTBalance);
         emit Reset(issueIndex);
     }
 
@@ -263,7 +235,7 @@ contract Lottery is LotteryOwnable, Initializable {
      * @param _price 价格
      * @param _numbers 号码数组
      */
-    function internalBuy(uint256 _price, uint8[4] memory _numbers) internal {
+    function _internalBuy(uint256 _price, uint8[4] memory _numbers) internal {
         // 确认不在开奖后
         require(!drawed(), "drawed, can not buy now");
         // 循环4个号码
@@ -319,6 +291,9 @@ contract Lottery is LotteryOwnable, Initializable {
         return tokenId;
     }
 
+    /**
+     * @dev 检查器,是否可以购买
+     */
     modifier canBuy(uint256 _price) {
         // 确认不在开奖后
         require(!drawed(), "drawed, can not buy now");
@@ -337,8 +312,8 @@ contract Lottery is LotteryOwnable, Initializable {
     function buy(uint256 _price, uint8[4] memory _numbers) external canBuy(_price) {
         // 私有购买
         uint256 tokenId = _buy(_price, _numbers);
-        // 将GOC发送到当前合约
-        IERC20(GOC).safeTransferFrom(address(msg.sender), address(this), _price);
+        // 将token发送到当前合约
+        IERC20(token).safeTransferFrom(address(msg.sender), address(this), _price);
         // 触发事件
         emit Buy(msg.sender, tokenId);
     }
@@ -357,8 +332,8 @@ contract Lottery is LotteryOwnable, Initializable {
             _buy(_price, _numbers[i]);
             totalPrice = totalPrice.add(_price);
         }
-        // 将GOC发送到当前合约
-        IERC20(GOC).safeTransferFrom(address(msg.sender), address(this), totalPrice);
+        // 将token发送到当前合约
+        IERC20(token).safeTransferFrom(address(msg.sender), address(this), totalPrice);
         // 触发事件
         emit MultiBuy(msg.sender, totalPrice);
     }
@@ -379,7 +354,7 @@ contract Lottery is LotteryOwnable, Initializable {
         // 如果奖金>0
         if (reward > 0) {
             // 将奖金发送给用户
-            IERC20(GOC).safeTransfer(address(msg.sender), reward);
+            IERC20(token).safeTransfer(address(msg.sender), reward);
         }
         // 触发事件
         emit Claim(msg.sender, _tokenId, reward);
@@ -411,7 +386,7 @@ contract Lottery is LotteryOwnable, Initializable {
         // 如果总奖金>0
         if (totalReward > 0) {
             // 将奖金发送给用户
-            IERC20(GOC).safeTransfer(address(msg.sender), totalReward);
+            IERC20(token).safeTransfer(address(msg.sender), totalReward);
         }
         // 触发事件
         emit MultiClaim(msg.sender, totalReward);
@@ -624,7 +599,7 @@ contract Lottery is LotteryOwnable, Initializable {
      * @param _amount 数额
      */
     function adminWithdraw(uint256 _amount) public onlyAdmin {
-        IERC20(GOC).safeTransfer(address(msg.sender), _amount);
+        IERC20(token).safeTransfer(address(msg.sender), _amount);
         emit DevWithdraw(msg.sender, _amount);
     }
 
