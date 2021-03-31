@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
-pragma experimental ABIEncoderV2;
 
 import "./Lottery.sol";
 
 /**
  * @title 4个号码的乐透彩票合约
- * @notice 4个号码必须按顺序匹配
+ * 部署顺序:
+ * 1.部署LotteryNFT
+ * 2.部署当前合约LotteryHUSD
+ * 3.设置LotteryNFT.setAdmin()
+ * 操作顺序:
+ * 1.购买 buy() || multiBuy()
+ * 2.进入开奖阶段 enterDrawingPhase()
+ * 3.开奖 drawing()
+ * 4.重置 reset()
  */
 contract LotteryHUSD is Lottery {
     /// @notice HUSD地址 用于购买彩票的Token
@@ -18,11 +25,17 @@ contract LotteryHUSD is Lottery {
 
     /**
      * @dev 构造函数
-     * @param _lottery 乐透NFT地址
+     * @param _lotteryNFT 乐透NFT地址
      */
-    constructor(LotteryNFT _lottery) public Lottery(_lottery, HUSD) {
-        // 批准GOC无限量
+    constructor(ILotteryNFT _lotteryNFT, address _lotteryGOC) public Lottery(_lotteryNFT, HUSD) {
+        // 设置地址
+        lotteryGOC = _lotteryGOC;
+        // 批准HUSD无限量
+        IERC20(GOC).approve(lotteryGOC, uint256(-1));
+        // 批准HUSD无限量
         IERC20(HUSD).approve(GOSWAP_ROUTER, uint256(-1));
+        // 最小售价
+        minPrice = 100000000;
     }
 
     /**
@@ -39,10 +52,13 @@ contract LotteryHUSD is Lottery {
         path[1] = GOC;
         // 调用路由合约用HUSD交换GOC
         Uni(GOSWAP_ROUTER).swapExactTokensForTokens(amount, uint256(0), path, address(this), block.timestamp.add(1800));
-        // 当前合约的GOT余额
+        // 当前合约的GOC余额
         uint256 GOCBalance = IERC20(GOC).balanceOf(address(this));
-        // 购买GOC彩票
-        ILottery(lotteryGOC).buy(GOCBalance, nullTicket);
+        // GOC余额需要大于最小价格
+        if (GOCBalance >= ILottery(lotteryGOC).minPrice()) {
+            // 购买GOC彩票
+            ILottery(lotteryGOC).buy(GOCBalance, nullTicket);
+        }
         emit Reset(issueIndex);
     }
 

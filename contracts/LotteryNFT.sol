@@ -32,8 +32,21 @@ contract LotteryNFT is ERC721, Ownable {
     /// @dev TokenID => 是否领奖
     mapping(uint256 => bool) public claimInfo;
 
-    constructor() public ERC721("Go Lottery GOC Ticket", "cGLT") {
-        adminAddress = msg.sender;
+    /**
+     * @dev 构造函数
+     * @param name 名称 "Go Lottery GOC Ticket"
+     * @param symbol 符号 "cGLT"
+     */
+    constructor(string memory name, string memory symbol) public ERC721(name, symbol) {
+        adminAddress = _msgSender();
+    }
+
+    /**
+     * @dev Throws if called by any account other than the admin.
+     */
+    modifier onlyAdmin() {
+        require(adminAddress == _msgSender(), "Admin: caller is not the admin");
+        _;
     }
 
     /**
@@ -48,7 +61,7 @@ contract LotteryNFT is ERC721, Ownable {
         uint8[4] memory _lotteryNumbers,
         uint256 _amount,
         uint256 _issueIndex
-    ) public onlyOwner returns (uint256) {
+    ) public onlyAdmin returns (uint256) {
         _tokenIds.increment();
 
         uint256 newItemId = _tokenIds.current();
@@ -101,7 +114,7 @@ contract LotteryNFT is ERC721, Ownable {
      * @dev 领奖
      * @param tokenId tokenId
      */
-    function claimReward(uint256 tokenId) external onlyOwner {
+    function claimReward(uint256 tokenId) external onlyAdmin {
         claimInfo[tokenId] = true;
     }
 
@@ -109,7 +122,7 @@ contract LotteryNFT is ERC721, Ownable {
      * @dev 批量领取
      * @param tokenIds tokenId数组
      */
-    function multiClaimReward(uint256[] memory tokenIds) external onlyOwner {
+    function multiClaimReward(uint256[] memory tokenIds) external onlyAdmin {
         for (uint256 i = 0; i < tokenIds.length; i++) {
             claimInfo[tokenIds[i]] = true;
         }
@@ -119,7 +132,7 @@ contract LotteryNFT is ERC721, Ownable {
      * @dev 销毁token
      * @param tokenId tokenId
      */
-    function burn(uint256 tokenId) external onlyOwner {
+    function burn(uint256 tokenId) external onlyAdmin {
         _burn(tokenId);
     }
 
@@ -135,8 +148,7 @@ contract LotteryNFT is ERC721, Ownable {
      * @dev 通过之前的开发者更新管理员地址
      * @param _adminAddress 管理员地址
      */
-    function setAdmin(address _adminAddress) external {
-        require(msg.sender == adminAddress, "admin: wut?");
+    function setAdmin(address _adminAddress) external onlyOwner {
         adminAddress = _adminAddress;
     }
 

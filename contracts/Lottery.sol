@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
-pragma experimental ABIEncoderV2;
 
-import "./LotteryNFT.sol";
+import "./ILotteryNFT.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -25,6 +24,8 @@ interface IGOT {
 
 interface ILottery {
     function buy(uint256 _price, uint8[4] calldata _numbers) external;
+
+    function minPrice() external returns (uint256);
 }
 
 /**
@@ -41,13 +42,13 @@ contract Lottery is Ownable {
     /// @dev 分配第一/第二/第三奖励
     uint8[3] public allocation;
     /// @dev 乐透NFT地址
-    LotteryNFT public lotteryNFT;
+    ILotteryNFT public lotteryNFT;
     /// @dev 管理员地址
     address public adminAddress;
     /// @dev 最大数字
     uint8 public maxNumber = 14;
     /// @dev 最低售价，如果小数点不为18，请重设
-    uint256 public minPrice = 1000000000000000000;
+    uint256 public minPrice;
     /// @notice GoSwap路由地址
     address public constant GOSWAP_ROUTER = 0xB88040A237F8556Cf63E305a06238409B3CAE7dC;
     /// @notice 购买彩票的Token
@@ -93,11 +94,11 @@ contract Lottery is Ownable {
 
     /**
      * @dev 构造函数
-     * @param _lottery 乐透NFT地址
+     * @param _lotteryNFT 乐透NFT地址
      * @param _token 购买彩票的Token
      */
-    constructor(LotteryNFT _lottery, address _token) public {
-        lotteryNFT = _lottery;
+    constructor(ILotteryNFT _lotteryNFT, address _token) public {
+        lotteryNFT = _lotteryNFT;
         adminAddress = msg.sender;
         lastTimestamp = block.timestamp;
         allocation = [50, 30, 10];
@@ -141,20 +142,23 @@ contract Lottery is Ownable {
         // 发行索引+1
         issueIndex = issueIndex + 1;
         // 处理未中奖的奖金,投放到下期奖池
+        uint256 amount;
         for (uint256 i = 0; i < 3; i++) {
             // 如果上期选中(4-i)个号码的人数为0
             if (getMatchingRewardAmount(issueIndex - 1, 4 - i) == 0) {
                 // 数额 = 最后一次总奖金 * 奖金分配比例 / 100
-                uint256 amount = getTotalRewards(issueIndex - 1).mul(allocation[i]).div(100);
-                // 内部购买(买一张0,0,0,0的彩票,目的为了把奖金放到下期奖池)
-                _internalBuy(amount, nullTicket);
+                amount = amount.add(getTotalRewards(issueIndex - 1).mul(allocation[i]).div(100));
             }
+        }
+        if (amount > 0) {
+            // 内部购买(买一张0,0,0,0的彩票,目的为了把奖金放到下期奖池)
+            _internalBuy(amount, nullTicket);
         }
         emit Reset(issueIndex);
     }
 
     /**
-     * @dev 进入开奖阶段
+     * @dev 进入开奖阶段,在开奖前必须先进入开奖阶段
      */
     function enterDrawingPhase() external onlyAdmin {
         // 确认不在开奖后
@@ -180,7 +184,7 @@ contract Lottery is Ownable {
         _randomNumber = uint256(_structHash);
         // 内联汇编
         assembly {
-            // 随机数 = 随机数 % 最大数字
+            // 随机数 = 随机数 % 最大数字 + 1
             _randomNumber := add(mod(_randomNumber, _maxNumber), 1)
         }
         // 中奖号码1 = 随机数 转为uint8
@@ -598,7 +602,7 @@ contract Lottery is Ownable {
      * @dev 退出时不关心奖励。仅紧急情况
      * @param _amount 数额
      */
-    function adminWithdraw(uint256 _amount) public onlyAdmin {
+    function adminWithdraw(uint256 _amount) public onlyOwner {
         IERC20(token).safeTransfer(address(msg.sender), _amount);
         emit DevWithdraw(msg.sender, _amount);
     }
@@ -607,7 +611,7 @@ contract Lottery is Ownable {
      * @dev 设置一张票的最低价格
      * @param _price 价格
      */
-    function setMinPrice(uint256 _price) external onlyAdmin {
+    function setMinPrice(uint256 _price) external onlyOwner {
         minPrice = _price;
     }
 
@@ -615,7 +619,7 @@ contract Lottery is Ownable {
      * @dev 设置最大号码
      * @param _maxNumber 最大号码
      */
-    function setMaxNumber(uint8 _maxNumber) external onlyAdmin {
+    function setMaxNumber(uint8 _maxNumber) external onlyOwner {
         maxNumber = _maxNumber;
     }
 
@@ -629,7 +633,7 @@ contract Lottery is Ownable {
         uint8 _allcation1,
         uint8 _allcation2,
         uint8 _allcation3
-    ) external onlyAdmin {
+    ) external onlyOwner {
         allocation = [_allcation1, _allcation2, _allcation3];
     }
 }

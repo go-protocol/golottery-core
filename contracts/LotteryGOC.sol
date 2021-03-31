@@ -1,14 +1,22 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.6.12;
-pragma experimental ABIEncoderV2;
 
 import "./Lottery.sol";
 
 /**
  * @title 4个号码的乐透彩票合约
- * @notice 4个号码必须按顺序匹配
+ * 部署顺序:
+ * 1.部署LotteryNFT
+ * 2.部署当前合约LotteryGOC
+ * 3.设置LotteryNFT.setAdmin()
+ * 4.设置GOT.addAdmin()
+ * 操作顺序:
+ * 1.购买 buy() || multiBuy()
+ * 2.进入开奖阶段 enterDrawingPhase()
+ * 3.开奖 drawing()
+ * 4.重置 reset()
  */
-contract LotteryHUSD is Lottery {
+contract LotteryGOC is Lottery {
     /// @notice GOT地址
     address public constant GOT = 0xA7d5b5Dbc29ddef9871333AD2295B2E7D6F12391;
     /// @notice GOC地址 用于购买彩票的Token
@@ -16,11 +24,13 @@ contract LotteryHUSD is Lottery {
 
     /**
      * @dev 构造函数
-     * @param _lottery 乐透NFT地址
+     * @param _lotteryNFT 乐透NFT地址
      */
-    constructor(LotteryNFT _lottery) public Lottery(_lottery, GOC) {
+    constructor(ILotteryNFT _lotteryNFT) public Lottery(_lotteryNFT, GOC) {
         // 批准GOC无限量
         IERC20(GOC).approve(GOSWAP_ROUTER, uint256(-1));
+        // 最小售价
+        minPrice = 1000000000000000000;
     }
 
     /**
