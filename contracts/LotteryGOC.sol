@@ -41,15 +41,19 @@ contract LotteryGOC is Lottery {
         // 销毁数额 = 最后一次总奖金 * (100 - 一等奖+二等奖+三等奖)分配比例 / 100
         uint8 burnAllocation = uint8(uint8(100).sub(allocation[0]).sub(allocation[1]).sub(allocation[2]));
         uint256 burnAmount = getTotalRewards(issueIndex - 1).mul(burnAllocation).div(100);
-        // 交易路径 GOC=>GOT
-        address[] memory path = new address[](2);
-        path[0] = GOC;
-        path[1] = GOT;
-        // 调用路由合约用GOC交换GOT
-        Uni(GOSWAP_ROUTER).swapExactTokensForTokens(burnAmount, uint256(0), path, address(this), block.timestamp.add(1800));
+        if (burnAmount > 0) {
+            // 交易路径 GOC=>GOT
+            address[] memory path = new address[](2);
+            path[0] = GOC;
+            path[1] = GOT;
+            // 调用路由合约用GOC交换GOT
+            Uni(GOSWAP_ROUTER).swapExactTokensForTokens(burnAmount, uint256(0), path, address(this), block.timestamp.add(1800));
+        }
         // 当前合约的GOT余额
         uint256 GOTBalance = IERC20(GOT).balanceOf(address(this));
-        // 销毁GOT
-        IGOT(GOT).burn(GOTBalance);
+        if (GOTBalance > 0) {
+            // 销毁GOT
+            IGOT(GOT).burn(GOTBalance);
+        }
     }
 }

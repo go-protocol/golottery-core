@@ -105,6 +105,42 @@ contract Lottery is Ownable {
         token = _token;
     }
 
+    /**
+     * @dev 获取历史中奖号码
+     * @param _issueIndex 发行索引
+     * @return _numbers 中奖号码数组
+     */
+    function getHistoryNumbers(uint256 _issueIndex) public view returns (uint8[4] memory _numbers) {
+        _numbers = historyNumbers[_issueIndex];
+    }
+
+    /**
+     * @dev 根据发行id获取NFT Token ID
+     * @param _issueIndex 发行索引
+     * @return _tokenId NFT Token ID
+     */
+    function getLotteryInfo(uint256 _issueIndex) public view returns (uint256[] memory _tokenId) {
+        _tokenId = lotteryInfo[_issueIndex];
+    }
+
+    /**
+     * @dev 获取历史中奖金额
+     * @param _issueIndex 发行索引
+     * @return _amount 中奖金额
+     */
+    function getHistoryAmount(uint256 _issueIndex) public view returns (uint256[] memory _amount) {
+        _amount = historyAmount[_issueIndex];
+    }
+
+    /**
+     * @dev 获取用户所有NFT
+     * @param _user 用户地址
+     * @return _tokenId NFT Token ID
+     */
+    function getUserInfo(address _user) public view returns (uint256[] memory _tokenId) {
+        _tokenId = userInfo[_user];
+    }
+
     /// @dev 空票
     uint8[4] internal nullTicket = [0, 0, 0, 0];
 

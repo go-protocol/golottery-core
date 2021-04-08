@@ -46,12 +46,14 @@ contract LotteryHUSD is Lottery {
         // 销毁数额 = 最后一次总奖金 * (100 - 一等奖+二等奖+三等奖)分配比例 / 100
         uint8 _allocation = uint8(uint8(100).sub(allocation[0]).sub(allocation[1]).sub(allocation[2]));
         uint256 amount = getTotalRewards(issueIndex - 1).mul(_allocation).div(100);
-        // 交易路径 HUSD=>GOC
-        address[] memory path = new address[](2);
-        path[0] = HUSD;
-        path[1] = GOC;
-        // 调用路由合约用HUSD交换GOC
-        Uni(GOSWAP_ROUTER).swapExactTokensForTokens(amount, uint256(0), path, address(this), block.timestamp.add(1800));
+        if (amount > 0) {
+            // 交易路径 HUSD=>GOC
+            address[] memory path = new address[](2);
+            path[0] = HUSD;
+            path[1] = GOC;
+            // 调用路由合约用HUSD交换GOC
+            Uni(GOSWAP_ROUTER).swapExactTokensForTokens(amount, uint256(0), path, address(this), block.timestamp.add(1800));
+        }
         // 当前合约的GOC余额
         uint256 GOCBalance = IERC20(GOC).balanceOf(address(this));
         // GOC余额需要大于最小价格
@@ -59,7 +61,6 @@ contract LotteryHUSD is Lottery {
             // 购买GOC彩票
             ILottery(lotteryGOC).buy(GOCBalance, nullTicket);
         }
-        emit Reset(issueIndex);
     }
 
     /**
