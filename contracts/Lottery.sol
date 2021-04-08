@@ -50,7 +50,8 @@ contract Lottery is Ownable {
     /// @dev 最低售价，如果小数点不为18，请重设
     uint256 public minPrice;
     /// @notice GoSwap路由地址
-    address public constant GOSWAP_ROUTER = 0xB88040A237F8556Cf63E305a06238409B3CAE7dC;
+    address public constant GOSWAP_ROUTER = 0xCa8E585A44375Fab1Bf6AD50887A770d06F0e32E;
+    // address public constant GOSWAP_ROUTER = 0xB88040A237F8556Cf63E305a06238409B3CAE7dC;
     /// @notice 购买彩票的Token
     address public token;
 
