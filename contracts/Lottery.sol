@@ -118,10 +118,10 @@ contract Lottery is Ownable {
     /**
      * @dev 根据发行id获取NFT Token ID
      * @param _issueIndex 发行索引
-     * @return _tokenId NFT Token ID
+     * @return _tokenIds NFT Token ID
      */
-    function getLotteryInfo(uint256 _issueIndex) public view returns (uint256[] memory _tokenId) {
-        _tokenId = lotteryInfo[_issueIndex];
+    function getLotteryInfo(uint256 _issueIndex) public view returns (uint256[] memory _tokenIds) {
+        _tokenIds = lotteryInfo[_issueIndex];
     }
 
     /**
@@ -136,43 +136,10 @@ contract Lottery is Ownable {
     /**
      * @dev 获取用户所有NFT
      * @param _user 用户地址
-     * @return _tokenId NFT Token ID
+     * @return _tokenIds NFT Token ID
      */
-    function getUserInfo(address _user) public view returns (uint256[] memory _tokenId) {
-        _tokenId = userInfo[_user];
-    }
-
-    /**
-     * @dev 根据发行索引获取用户所有NFT
-     * @param _issueIndex 发行索引
-     * @param _user 用户地址
-     * @return _tokenId NFT Token ID
-     */
-    function getUserInfo(uint256 _issueIndex, address _user) public view returns (uint256[] memory _tokenId) {
-        uint256[] memory _allTokens = userInfo[_user];
-        uint256 count;
-        for (uint256 i = 0; i < _allTokens.length; i++) {
-            if (lotteryNFT.getLotteryIssueIndex(_allTokens[i]) == _issueIndex) {
-                _tokenId[count] = _allTokens[i];
-                count++;
-            }
-        }
-    }
-
-    /**
-     * @dev 根据发行索引获取用户中奖的NFT
-     * @param _user 用户地址
-     * @return _tokenId NFT Token ID
-     */
-    function getUserReward(address _user) public view returns (uint256[] memory _tokenId) {
-        uint256[] memory _allTokens = userInfo[_user];
-        uint256 count;
-        for (uint256 i = 0; i < _allTokens.length; i++) {
-            if (getRewardView(_allTokens[i]) > 0) {
-                _tokenId[count] = _allTokens[i];
-                count++;
-            }
-        }
+    function getUserInfo(address _user) public view returns (uint256[] memory _tokenIds) {
+        _tokenIds = userInfo[_user];
     }
 
     /// @dev 空票
@@ -429,9 +396,9 @@ contract Lottery is Ownable {
         if (reward > 0) {
             // 将奖金发送给用户
             IERC20(token).safeTransfer(address(msg.sender), reward);
+            // 触发事件
+            emit Claim(msg.sender, _tokenId, reward);
         }
-        // 触发事件
-        emit Claim(msg.sender, _tokenId, reward);
     }
 
     /**
@@ -632,8 +599,10 @@ contract Lottery is Ownable {
         uint8[4] memory lotteryNumbers = lotteryNFT.getLotteryNumbers(_tokenId);
         // 通过TokenID获取中奖号码
         uint8[4] memory _winningNumbers = historyNumbers[_issueIndex];
-        // 确认奖池数量不为0
-        require(_winningNumbers[0] != 0, "not drawed");
+        // 如果中奖号码为0,代表不存在的发行索引或未开奖
+        if (_winningNumbers[0] == 0) {
+            return 0;
+        }
 
         // 匹配的号码
         uint256 matchingNumber = 0;
