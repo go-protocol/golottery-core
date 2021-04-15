@@ -17,8 +17,7 @@ import "./Lottery.sol";
  */
 contract LotteryHUSD is Lottery {
     /// @notice HUSD地址 用于购买彩票的Token
-    // address public constant HUSD = 0x0298c2b32eaE4da002a15f36fdf7615BEa3DA047;
-    address public constant HUSD = 0x0f548051B135fa8f7F6190cb78Fd13eCB544fEE6;
+    address public constant HUSD = 0x0298c2b32eaE4da002a15f36fdf7615BEa3DA047;
     /// @notice GOC地址
     address public constant GOC = 0x271B54EBe36005A7296894F819D626161C44825C;
     /// @notice Lottery GOC地址
