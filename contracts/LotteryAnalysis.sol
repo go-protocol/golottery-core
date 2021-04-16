@@ -18,11 +18,13 @@ interface INFT {
     function getLotteryIssueIndex(uint256 tokenId) external view returns (uint256);
 
     function getClaimStatus(uint256 tokenId) external view returns (bool);
+
+    function getLotteryAmount(uint256 tokenId) external view returns (uint256);
 }
 
 contract LotteryAnalysis {
-    address public constant Lottery_HUSD = 0xD3116F70DaC6e1D9c50763026b1CcF560e4664D4;
-    address public constant Lottery_GOC = 0x822542e0b599Fd512AC91E44AB6b3E5098345693;
+    address public constant Lottery_HUSD = 0xc881B2870b891B70bDFE9B426c7fb524fFC1F7C1;
+    address public constant Lottery_GOC = 0xA4Cd00DE7138841F0eFaF3c94202270672Bf9291;
 
     /**
      * @dev 获取用户所有NFT
@@ -39,18 +41,21 @@ contract LotteryAnalysis {
             uint256[] memory _tickets,
             uint256[] memory _issueIndex,
             bool[] memory _claimed,
-            uint256[] memory _reward
+            uint256[] memory _reward,
+            uint256[] memory _amount
         )
     {
         _tickets = ILottery(Lottery_GOC).getUserInfo(_user);
         _issueIndex = new uint256[](_tickets.length);
         _claimed = new bool[](_tickets.length);
         _reward = new uint256[](_tickets.length);
+        _amount = new uint256[](_tickets.length);
         address NFT_GOC = ILottery(Lottery_GOC).lotteryNFT();
         for (uint256 i = 0; i < _tickets.length; i++) {
             _issueIndex[i] = INFT(NFT_GOC).getLotteryIssueIndex(_tickets[i]);
             _claimed[i] = INFT(NFT_GOC).getClaimStatus(_tickets[i]);
             _reward[i] = ILottery(Lottery_GOC).getRewardView(_tickets[i]);
+            _amount[i] = INFT(NFT_GOC).getLotteryAmount(_tickets[i]);
         }
     }
 
@@ -69,18 +74,21 @@ contract LotteryAnalysis {
             uint256[] memory _tickets,
             uint256[] memory _issueIndex,
             bool[] memory _claimed,
-            uint256[] memory _reward
+            uint256[] memory _reward,
+            uint256[] memory _amount
         )
     {
         _tickets = ILottery(Lottery_HUSD).getUserInfo(_user);
         _issueIndex = new uint256[](_tickets.length);
         _claimed = new bool[](_tickets.length);
         _reward = new uint256[](_tickets.length);
+        _amount = new uint256[](_tickets.length);
         address NFT_HUSD = ILottery(Lottery_HUSD).lotteryNFT();
         for (uint256 i = 0; i < _tickets.length; i++) {
             _issueIndex[i] = INFT(NFT_HUSD).getLotteryIssueIndex(_tickets[i]);
             _claimed[i] = INFT(NFT_HUSD).getClaimStatus(_tickets[i]);
             _reward[i] = ILottery(Lottery_HUSD).getRewardView(_tickets[i]);
+            _amount[i] = INFT(NFT_HUSD).getLotteryAmount(_tickets[i]);
         }
     }
 
